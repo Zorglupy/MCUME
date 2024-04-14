@@ -132,18 +132,19 @@ void emu_DrawLine16(unsigned short * VBuf, int width, int height, int line)
 #endif        
     }
 }  
-
+*/
 void emu_DrawScreen(unsigned char * VBuf, int width, int height, int stride) 
 {
     if (skip == 0) {
 #ifdef USE_VGA                
         tft.writeScreen(width,height-TFT_VBUFFER_YCROP,stride, VBuf+(TFT_VBUFFER_YCROP/2)*stride, palette8);
 #else
-        tft.writeScreen(width,height-TFT_VBUFFER_YCROP,stride, VBuf+(TFT_VBUFFER_YCROP/2)*stride, palette16);
+        //tft.writeScreen(width,height-TFT_VBUFFER_YCROP,stride, VBuf+(TFT_VBUFFER_YCROP/2)*stride, palette16);
+        tft.writeScreenPal(width,height-TFT_VBUFFER_YCROP,stride, VBuf+(TFT_VBUFFER_YCROP/2)*stride, palette16);
 #endif
     }
 }
-
+/*
 int emu_FrameSkip(void)
 {
     return skip;

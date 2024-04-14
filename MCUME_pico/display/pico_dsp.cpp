@@ -17,7 +17,7 @@
 #include "hardware/irq.h"
 #include <string.h>
 
-#include "PICO_DSP.h"
+#include "pico_dsp.h"
 #include "font8x8.h"
 #include "include.h"
 
@@ -26,20 +26,22 @@ static gfx_mode_t gfxmode = MODE_UNDEFINED;
 /* TFT structures / constants */
 #define digitalWrite(pin, val) gpio_put(pin, val)
 
-#define SPICLOCK 60000000 
+#define SPICLOCK 60000000
+
 #ifdef USE_VGA
-#define SPI_MODE SPI_CPOL_1 
+  #define SPI_MODE SPI_CPOL_1 
 #else
-#ifdef ST7789
-#ifdef ST7789_POL
-#define SPI_MODE SPI_CPOL_0
-#else
-#define SPI_MODE SPI_CPOL_1
-#endif
-#endif
-#ifdef ILI9341
-#define SPI_MODE SPI_CPOL_0
-#endif
+  #ifdef ST7789
+    #ifdef ST7789_POL
+      #define SPI_MODE SPI_CPOL_0
+    #else
+      #define SPI_MODE SPI_CPOL_1
+    #endif
+  #endif
+
+  #ifdef ILI9341
+    #define SPI_MODE SPI_CPOL_0
+  #endif
 #endif
 
 #define LINES_PER_BLOCK  64
@@ -82,8 +84,8 @@ static const uint8_t init_commands[] = {
   1+DELAY_MASK, TFT_SWRESET,  150,
   1+DELAY_MASK, TFT_SLPOUT,   255,
   2+DELAY_MASK, TFT_PIXFMT, 0x55, 10,
-  2,            TFT_MADCTL, TFT_MADCTL_MV | TFT_MADCTL_BGR,
-  1, TFT_INVON,
+  2, TFT_MADCTL, TFT_MADCTL_MV | TFT_MADCTL_BGR,
+  //1, TFT_INVON,
   1, TFT_DISPON,
   0
 };
@@ -100,15 +102,9 @@ static volatile bool cancelled = false;
 static volatile uint8_t curTransfer = 0;
 static uint8_t nbTransfer = 0;
 
-/* VGA structures / constants */
-#define R16(rgb) ((rgb>>8)&0xf8) 
-#define G16(rgb) ((rgb>>3)&0xfc) 
-#define B16(rgb) ((rgb<<3)&0xf8) 
-#ifdef VGA222
-#define VGA_RGB(r,g,b)   ( (((r>>6)&0x03)<<4) | (((g>>6)&0x03)<<2) | (((b>>6)&0x3)<<0) )
-#else
-#define VGA_RGB(r,g,b)   ( (((r>>5)&0x07)<<5) | (((g>>5)&0x07)<<2) | (((b>>6)&0x3)<<0) )
-#endif
+static int  fb_width;
+static int  fb_height;
+static int  fb_stride;
 
 // 8 bits 320x240 frame buffer => 64K
 static vga_pixel * visible_framebuffer = NULL;
@@ -116,9 +112,16 @@ static vga_pixel * framebuffer = NULL;
 static vga_pixel * fb0 = NULL;
 static vga_pixel * fb1 = NULL;
 
-static int  fb_width;
-static int  fb_height;
-static int  fb_stride;
+/* VGA structures / constants */
+#define R16(rgb) ((rgb>>8)&0xf8) 
+#define G16(rgb) ((rgb>>3)&0xfc) 
+#define B16(rgb) ((rgb<<3)&0xf8)
+
+#ifdef VGA222
+  #define VGA_RGB(r,g,b)   ( (((r>>6)&0x03)<<4) | (((g>>6)&0x03)<<2) | (((b>>6)&0x3)<<0) )
+#else
+  #define VGA_RGB(r,g,b)   ( (((r>>5)&0x07)<<5) | (((g>>5)&0x07)<<2) | (((b>>6)&0x3)<<0) )
+#endif
 
 static const sVmode* vmode=NULL;
 static const sVmode* volatile VgaVmodeReq = NULL; // request to reinitialize videomode, 1=only stop driver
@@ -126,6 +129,7 @@ static const sVmode* volatile VgaVmodeReq = NULL; // request to reinitialize vid
 static semaphore_t core1_initted;
 static void core1_func();
 static void core1_sio_irq();
+
 static void VgaInitReql(const sVmode* vmode)
 {
   if (vmode == NULL) vmode = (const sVmode*)1;
@@ -164,24 +168,23 @@ static void core1_func()
   }
 }
 
-
 void PICO_DSP::setArea(uint16_t x1,uint16_t y1,uint16_t x2,uint16_t y2) {
   int dx=0;
   int dy=0;
-#ifdef ST7789
-  if (TFT_REALWIDTH == TFT_REALHEIGHT)
-  {
-#ifdef ROTATE_SCREEN
-    if (!flipped) {
-      dy += 80;    
-    }
-#else  
-    if (flipped) {
-      dx += 80;    
-    }
-#endif      
-  }
-#endif  
+  #ifdef ST7789
+    if (TFT_REALWIDTH == TFT_REALHEIGHT)
+      {
+      #ifdef ROTATE_SCREEN
+        if (!flipped) {
+          dy += 80;    
+        }
+      #else  
+        if (flipped) {
+          dx += 80;    
+        }
+      #endif      
+      }
+  #endif  
 
   digitalWrite(_dc, 0);
   SPItransfer(TFT_CASET);
@@ -203,6 +206,9 @@ void PICO_DSP::setArea(uint16_t x1,uint16_t y1,uint16_t x2,uint16_t y2) {
   return; 
 }
 
+// =========================================================
+// PICO_DSP Class
+// =========================================================
 
 PICO_DSP::PICO_DSP()
 {
@@ -228,7 +234,8 @@ gfx_error_t PICO_DSP::begin(gfx_mode_t mode)
         //spi_init(TFT_SPIREG, 0);
         //spi_deinit(TFT_SPIREG);
         //spi_set_slave(TFT_SPIREG, true);
-      }  
+      }
+
       gfxmode = mode;
       fb_width = 320;
       fb_height = 240;      
@@ -296,12 +303,12 @@ gfx_error_t PICO_DSP::begin(gfx_mode_t mode)
       digitalWrite(_cs, 0);
       while (count = *addr++) {
         uint8_t command = *addr++;
-#ifdef ILI9341
-        if ( command == TFT_INVON ) {
-          // Skip TFT_INVON for ILI
-        }
-        else 
-#endif
+        #ifdef ILI9341
+          if ( command == TFT_INVON ) {
+            // Skip TFT_INVON for ILI
+          }
+          else 
+        #endif
         {
           digitalWrite(_dc, 0); // command
           SPItransfer(command);
@@ -309,12 +316,12 @@ gfx_error_t PICO_DSP::begin(gfx_mode_t mode)
           count &= ~DELAY_MASK;
           while (--count > 0) { // data
             uint8_t data = *addr++;
-#ifdef ILI9341
-#else
+            #ifdef ILI9341
+            #else
             if ( command == TFT_MADCTL ) {
               data = TFT_MADCTL_MX | TFT_MADCTL_MV |TFT_MADCTL_RGB;
             }
-#endif
+            #endif
             digitalWrite(_dc, 1);
             SPItransfer(data);
           }
@@ -355,30 +362,33 @@ void PICO_DSP::flipscreen(bool flip)
   if (flip) {
     flipped=true;
 
-#ifdef ILI9341         
-    SPItransfer(TFT_MADCTL_MV | TFT_MADCTL_BGR);
-#endif
-#ifdef ST7789
-#ifdef ROTATE_SCREEN
-    SPItransfer(TFT_MADCTL_RGB);
-#else
-    SPItransfer(TFT_MADCTL_MY | TFT_MADCTL_MV |TFT_MADCTL_RGB);
-#endif
-#endif 
+    #ifdef ILI9341         
+        SPItransfer(TFT_MADCTL_MV | TFT_MADCTL_BGR);
+    #endif
+
+    #ifdef ST7789
+      #ifdef ROTATE_SCREEN
+          SPItransfer(TFT_MADCTL_RGB);
+      #else
+          SPItransfer(TFT_MADCTL_MY | TFT_MADCTL_MV |TFT_MADCTL_RGB);
+      #endif
+    #endif 
   }
   else {
     flipped=false;
    
-#ifdef ILI9341        
-    SPItransfer(TFT_MADCTL_MX | TFT_MADCTL_MY | TFT_MADCTL_MV | TFT_MADCTL_BGR);
-#endif
-#ifdef ST7789
-#ifdef ROTATE_SCREEN
-    SPItransfer(TFT_MADCTL_MX | TFT_MADCTL_MY | TFT_MADCTL_RGB);
-#else
-    SPItransfer(TFT_MADCTL_MX | TFT_MADCTL_MV | TFT_MADCTL_RGB);
-#endif
-#endif  
+    #ifdef ILI9341        
+        SPItransfer(TFT_MADCTL_MX | TFT_MADCTL_MY | TFT_MADCTL_MV | TFT_MADCTL_BGR);
+    #endif
+
+    #ifdef ST7789
+      #ifdef ROTATE_SCREEN
+          SPItransfer(TFT_MADCTL_MX | TFT_MADCTL_MY | TFT_MADCTL_RGB);
+      #else
+          SPItransfer(TFT_MADCTL_MX | TFT_MADCTL_MV | TFT_MADCTL_RGB);
+
+      #endif
+    #endif  
   }
   digitalWrite(_cs, 1);   
 }

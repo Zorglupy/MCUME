@@ -34,13 +34,15 @@
 //	GP7 ... VGA R2
 //	GP8 ... VGA SYNC synchronization (inverted: negative SYNC=LOW=0x80, BLACK=HIGH=0x00)
 #define VGA_GPIO_FIRST	VGA_COLORBASE	// first VGA GPIO
+
 #ifdef VGA222
-#define VGA_GPIO_OUTNUM	6   // number of VGA color GPIOs, without HSYNC and VSYNC
-#define VGA_GPIO_NUM	7	// number of VGA GPIOs, including HSYNC and VSYNC
+    #define VGA_GPIO_OUTNUM	6   // number of VGA color GPIOs, without HSYNC and VSYNC
+    #define VGA_GPIO_NUM	7	// number of VGA GPIOs, including HSYNC and VSYNC
 #else
-#define VGA_GPIO_OUTNUM	8	// number of VGA color GPIOs, without HSYNC and VSYNC
-#define VGA_GPIO_NUM	9	// number of VGA GPIOs, including HSYNC and VSYNC
+    #define VGA_GPIO_OUTNUM	8	// number of VGA color GPIOs, without HSYNC and VSYNC
+    #define VGA_GPIO_NUM	9	// number of VGA GPIOs, including HSYNC and VSYNC
 #endif
+
 #define VGA_GPIO_LAST	(VGA_GPIO_FIRST+VGA_GPIO_NUM-1)	// last VGA GPIO
 #define VGA_GPIO_SYNC	VGA_SYNCBASE	// VGA SYNC GPIO
 
@@ -53,7 +55,6 @@
 
 // LAYERS==1
 #define VGA_SMALL	B0	// mask of all state machines
-
 
 // VGA DMA
 #define VGA_DMA		2		// VGA DMA base channel

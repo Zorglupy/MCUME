@@ -72,6 +72,9 @@ static int pot_max_right = POT_RIGHT;
 
 static int framesdrawn=0;
 
+static int ik;     // joypad key
+static int ihk;    // I2C keyboard key
+
 /* MEMORY MAP                   INDEX  (0 is invalid)
 * 0-3FFF    RAM       (read/write)  1
 * 4000-BFFF ROM       (ro)          2
@@ -603,4 +606,11 @@ void at5_Start(char * cartname)
   CPU_Reset();
   
   emu_printf("init done");   
+}
+
+
+void at5_Input(int click)
+{
+  ik = emu_GetPad();
+  //ihk = emu_ReadI2CKeyboard();
 }

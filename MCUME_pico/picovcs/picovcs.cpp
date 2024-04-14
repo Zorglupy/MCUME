@@ -8,7 +8,7 @@ extern "C" {
 #include "keyboard_osd.h"
 
 extern "C" {
-#include "Vcsemu.h"
+#include "vcsemu.h"
 }
 #include <stdio.h>
 #include "pico_dsp.h"

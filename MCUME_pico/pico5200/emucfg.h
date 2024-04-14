@@ -17,7 +17,8 @@
 
 #define emu_Init(ROM) {at5_Init(); at5_Start(ROM);}
 #define emu_Step(x) {at5_Step();}
-#define emu_Input(x) {}
+//#define emu_Input(x) {}
+#define emu_Input(x) {/*at5_Input(x);*/}
 
 #ifdef KEYMAP_PRESENT
    

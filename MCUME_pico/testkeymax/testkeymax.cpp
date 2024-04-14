@@ -14,7 +14,6 @@ extern "C" {
 PICO_DSP tft;
 static int fb_width, fb_height;
 
-
 #include "hardware/clocks.h"
 #include "hardware/vreg.h"
 
@@ -91,39 +90,39 @@ int main(void) {
         buf[1] = digits[(bClick>>8)&0xf];
         buf[2] = digits[(bClick>>4)&0xf];
         buf[3] = digits[bClick&0xf];
-        tft.drawText(4*8,0,buf,RGBVAL16(0x00,0x00,0x00),RGBVAL16(0xFF,0xFF,0xFF),false);
+        tft.drawText(6*8,0,buf,RGBVAL16(0x00,0x00,0x00),RGBVAL16(0xFF,0xFF,0xFF),false);
         buf[3] = 0;
         int key = emu_ReadI2CKeyboard();
         buf[0] = digits[(key>>8)&0xf];
         buf[1] = digits[(key>>4)&0xf];
         buf[2] = digits[key&0xf];        
-        tft.drawText(4*8,8,buf,RGBVAL16(0x00,0x00,0x00),RGBVAL16(0xFF,0xFF,0xFF),false);
+        tft.drawText(6*8,8,buf,RGBVAL16(0x00,0x00,0x00),RGBVAL16(0xFF,0xFF,0xFF),false);
 
         buf[2] = 0;
         key = emu_ReadI2CKeyboard2(0);
         buf[0] = digits[(key>>4)&0xf];
         buf[1] = digits[key&0xf];
-        tft.drawText(9*8+0*24,0*8,buf,RGBVAL16(0x00,0x00,0x00),RGBVAL16(0xFF,0xFF,0xFF),true);
+        tft.drawText(11*8+0*24,0*8,buf,RGBVAL16(0x00,0x00,0x00),RGBVAL16(0xFF,0xFF,0xFF),true);
         key = emu_ReadI2CKeyboard2(1);
         buf[0] = digits[(key>>4)&0xf];
         buf[1] = digits[key&0xf];
-        tft.drawText(9*8+1*24,0*8,buf,RGBVAL16(0x00,0x00,0x00),RGBVAL16(0xFF,0xFF,0xFF),true);
+        tft.drawText(11*8+1*24,0*8,buf,RGBVAL16(0x00,0x00,0x00),RGBVAL16(0xFF,0xFF,0xFF),true);
         key = emu_ReadI2CKeyboard2(2);
         buf[0] = digits[(key>>4)&0xf];
         buf[1] = digits[key&0xf];
-        tft.drawText(9*8+2*24,0*8,buf,RGBVAL16(0x00,0x00,0x00),RGBVAL16(0xFF,0xFF,0xFF),true);
+        tft.drawText(11*8+2*24,0*8,buf,RGBVAL16(0x00,0x00,0x00),RGBVAL16(0xFF,0xFF,0xFF),true);
         key = emu_ReadI2CKeyboard2(3);
         buf[0] = digits[(key>>4)&0xf];
         buf[1] = digits[key&0xf];
-        tft.drawText(9*8+3*24,0*8,buf,RGBVAL16(0x00,0x00,0x00),RGBVAL16(0xFF,0xFF,0xFF),true);
+        tft.drawText(11*8+3*24,0*8,buf,RGBVAL16(0x00,0x00,0x00),RGBVAL16(0xFF,0xFF,0xFF),true);
         key = emu_ReadI2CKeyboard2(4);
         buf[0] = digits[(key>>4)&0xf];
         buf[1] = digits[key&0xf];
-        tft.drawText(9*8+4*24,0*8,buf,RGBVAL16(0x00,0x00,0x00),RGBVAL16(0xFF,0xFF,0xFF),true);
+        tft.drawText(11*8+4*24,0*8,buf,RGBVAL16(0x00,0x00,0x00),RGBVAL16(0xFF,0xFF,0xFF),true);
         key = emu_ReadI2CKeyboard2(5);
         buf[0] = digits[(key>>4)&0xf];
         buf[1] = digits[key&0xf];
-        tft.drawText(9*8+5*24,0*8,buf,RGBVAL16(0x00,0x00,0x00),RGBVAL16(0xFF,0xFF,0xFF),true);
+        tft.drawText(11*8+5*24,0*8,buf,RGBVAL16(0x00,0x00,0x00),RGBVAL16(0xFF,0xFF,0xFF),true);
 #ifdef PICOZX        
         key = emu_ReadI2CKeyboard2(6);
         buf[0] = digits[(key>>4)&0xf];

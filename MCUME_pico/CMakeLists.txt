@@ -6,14 +6,14 @@ include(pico_sdk_import.cmake)
 # We also need PICO EXTRAS
 #include(pico_extras_import.cmake)
 
-set(TARGET testkeymax)
+#set(TARGET testkeymax)
 #set(TARGET pico20)
 #set(TARGET pico64)
 #set(TARGET pico81)
 #set(TARGET picospeccy)
 #set(TARGET pico800)
 #set(TARGET pico5200)
-#set(TARGET picocolem)
+set(TARGET picocolem)
 #set(TARGET picoo2em)
 #set(TARGET picovcs)
 
@@ -33,7 +33,8 @@ include_directories(display)
 #include_directories(vga_t4)
 #include_directories(picovga_t4)
 #include_directories(tft_t)
-include_directories(psram)
+
+#include_directories(psram)
 
 if( ${TARGET} MATCHES "pico20" )
 set(PICO20_SOURCES 
@@ -143,19 +144,19 @@ endif()
 
 if( ${TARGET} MATCHES "picovcs" )
 set(PICOVCS_SOURCES 
-		picovcs/At2600.c 
-		picovcs/Collision.c
-		picovcs/Cpu.c
-		picovcs/Display.c
-		picovcs/Exmacro.c
-		picovcs/Keyboard.c
-		picovcs/Memory.c
-		picovcs/Options.c
-		picovcs/Raster.c
-		picovcs/Table.c
-		picovcs/Tiasound.c
-		picovcs/Vcsemu.c
-		picovcs/Vmachine.c
+		picovcs/at2600.c 
+		picovcs/collision.c
+		picovcs/cpu.c
+		picovcs/display.c
+		picovcs/exmacro.c
+		picovcs/keyboard.c
+		picovcs/memory.c
+		picovcs/options.c
+		picovcs/raster.c
+		picovcs/table.c
+		picovcs/tiasound.c
+		picovcs/vcsemu.c
+		picovcs/vmachine.c
 		picovcs/picovcs.cpp
 	)
 endif()

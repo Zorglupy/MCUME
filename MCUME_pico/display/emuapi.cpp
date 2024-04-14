@@ -21,7 +21,10 @@ static bool emu_readGfxConfig(void);
 static bool emu_eraseGfxConfig(void);
 
 #include "pico_dsp.h"
+
 extern PICO_DSP tft;
+
+#define DEBUG_OUPUT         0
 
 #define MAX_FILENAME_PATH   64
 #define NB_FILE_HANDLER     4
@@ -47,8 +50,6 @@ extern PICO_DSP tft;
 #define MENU_VGA_XOFFSET    (MENU_FILE_XOFFSET+MENU_FILE_W+8)
 #define MENU_VGA_YOFFSET    (MENU_VBAR_YOFFSET+MENU_FILE_H-32-37)
 
-
-
 static int nbFiles=0;
 static int curFile=0;
 static int topFile=0;
@@ -58,16 +59,17 @@ static char files[MAX_FILES][MAX_FILENAME_SIZE];
 static bool menuRedraw=true;
 
 #if (defined(PICOMPUTER) || defined(PICOZX) )
-static const unsigned short * keys;
-static unsigned char keymatrix[7];
-static int keymatrix_hitrow=-1;
-static bool key_fn=false;
-static bool key_alt=false;
-static uint32_t keypress_t_ms=0;
-static uint32_t last_t_ms=0;
-static uint32_t hundred_ms_cnt=0;
-static bool ledflash_toggle=false;
+  static const unsigned short * keys;
+  static unsigned char keymatrix[7];
+  static int keymatrix_hitrow=-1;
+  static bool key_fn=false;
+  static bool key_alt=false;
+  static uint32_t keypress_t_ms=0;
+  static uint32_t last_t_ms=0;
+  static uint32_t hundred_ms_cnt=0;
+  static bool ledflash_toggle=false;
 #endif
+
 static int keyMap;
 
 static bool joySwapped = false;
@@ -78,7 +80,6 @@ static uint8_t usbnavpad=0;
 
 static bool menuOn=true;
 static bool autorun=false;
-
 
 /********************************
  * Generic output and malloc
@@ -110,20 +111,26 @@ void * emu_Malloc(int size)
 {
   void * retval =  malloc(size);
   if (!retval) {
-    emu_printf("failled to allocate");
-    emu_printf(size);
-    emu_printf("fallback");
+    #if DEBUG_OUTPUT
+      emu_printf("failled to allocate");
+      emu_printf(size);
+      emu_printf("fallback");
+    #endif
     if ( (malbufpt+size) < sizeof(malbuf) ) {
       retval = (void *)&malbuf[malbufpt];
       malbufpt += size;      
     }
     else {
+    #if DEBUG_OUTPUT
       emu_printf("failure to allocate");
+    #endif
     }
   }
   else {
-    emu_printf("could allocate dynamic ");
-    emu_printf(size);    
+    #if DEBUG_OUTPUT
+      emu_printf("could allocate dynamic ");
+      emu_printf(size);    
+    #endif
   }
   
   return retval;
@@ -136,11 +143,15 @@ void * emu_MallocI(int size)
   if ( (malbufpt+size) < sizeof(malbuf) ) {
     retval = (void *)&malbuf[malbufpt];
     malbufpt += size;
-    emu_printf("could allocate static ");
-    emu_printf(size);          
+    #if DEBUG_OUTPUT
+      emu_printf("could allocate static ");
+      emu_printf(size);          
+    #endif
   }
   else {
-    emu_printf("failure to allocate");
+    #if DEBUG_OUTPUT
+      emu_printf("failure to allocate");
+    #endif
   }
 
   return retval;
@@ -160,165 +171,164 @@ void emu_drawText(unsigned short x, unsigned short y, const char * text, unsigne
  * OSKB handling
 ********************************/ 
 #if (defined(ILI9341) || defined(ST7789)) && defined(USE_VGA)
-// On screen keyboard position
-#define KXOFF      28 //64
-#define KYOFF      96
-#define KWIDTH     11 //22
-#define KHEIGHT    3
+  // On screen keyboard position
+  #define KXOFF      28 //64
+  #define KYOFF      96
+  #define KWIDTH     11 //22
+  #define KHEIGHT    3
 
-static bool oskbOn = false;
-static int cxpos = 0;
-static int cypos = 0;
-static int oskbMap = 0;
-static uint16_t oskbBLastState = 0;
+  static bool oskbOn = false;
+  static int cxpos = 0;
+  static int cypos = 0;
+  static int oskbMap = 0;
+  static uint16_t oskbBLastState = 0;
 
-static void lineOSKB2(int kxoff, int kyoff, char * str, int row)
-{
-  char c[2] = {'A',0};
-  const char * cpt = str;
-  for (int i=0; i<KWIDTH; i++)
+  static void lineOSKB2(int kxoff, int kyoff, char * str, int row)
   {
-    c[0] = *cpt++;
-    c[1] = 0;
-    uint16_t bg = RGBVAL16(0x00,0x00,0xff);
-    if ( (cxpos == i) && (cypos == row) ) bg = RGBVAL16(0xff,0x00,0x00);
-    tft.drawTextNoDma(kxoff+8*i,kyoff, &c[0], RGBVAL16(0x00,0xff,0xff), bg, ((i&1)?false:true));
-  } 
-}
+    char c[2] = {'A',0};
+    const char * cpt = str;
+    for (int i=0; i<KWIDTH; i++)
+    {
+      c[0] = *cpt++;
+      c[1] = 0;
+      uint16_t bg = RGBVAL16(0x00,0x00,0xff);
+      if ( (cxpos == i) && (cypos == row) ) bg = RGBVAL16(0xff,0x00,0x00);
+      tft.drawTextNoDma(kxoff+8*i,kyoff, &c[0], RGBVAL16(0x00,0xff,0xff), bg, ((i&1)?false:true));
+    } 
+  }
 
-static void lineOSKB(int kxoff, int kyoff, char * str, int row)
-{
-  char c[4] = {' ',0,' ',0};
-  const char * cpt = str;
-  for (int i=0; i<KWIDTH; i++)
+  static void lineOSKB(int kxoff, int kyoff, char * str, int row)
   {
-    c[1] = *cpt++;
-    uint16_t bg;
-    if (row&1) bg = (i&1)?RGBVAL16(0xff,0xff,0xff):RGBVAL16(0xe0,0xe0,0xe0);
-    else bg = (i&1)?RGBVAL16(0xe0,0xe0,0xe0):RGBVAL16(0xff,0xff,0xff);
-    if ( (cxpos == i) && (cypos == row) ) bg = RGBVAL16(0x00,0xff,0xff);
-    tft.drawTextNoDma(kxoff+24*i,kyoff+32*row+0 , "   ", RGBVAL16(0x00,0x00,0x00), bg, false);
-    tft.drawTextNoDma(kxoff+24*i,kyoff+32*row+8 , &c[0], RGBVAL16(0x00,0x00,0x00), bg, true);
-    tft.drawTextNoDma(kxoff+24*i,kyoff+32*row+24, "   ", RGBVAL16(0x00,0x00,0x00), bg, false);
-  } 
-}
-
-
-static void drawOskb(void)
-{
-//  lineOSKB2(KXOFF,KYOFF+0,  (char *)"Q1W2E3R4T5Y6U7I8O9P0<=",  0);
-//  lineOSKB2(KXOFF,KYOFF+16, (char *)"  A!S@D#F$G%H+J&K*L-EN",  1);
-//  lineOSKB2(KXOFF,KYOFF+32, (char *)"  Z(X)C?V/B\"N<M>.,SP  ", 2);
-/*  
-  if (oskbMap == 0) {
-    lineOSKB(KXOFF,KYOFF, keylables_map1_0,  0);
-    lineOSKB(KXOFF,KYOFF, keylables_map1_1,  1);
-    lineOSKB(KXOFF,KYOFF, keylables_map1_2,  2);
+    char c[4] = {' ',0,' ',0};
+    const char * cpt = str;
+    for (int i=0; i<KWIDTH; i++)
+    {
+      c[1] = *cpt++;
+      uint16_t bg;
+      if (row&1) bg = (i&1)?RGBVAL16(0xff,0xff,0xff):RGBVAL16(0xe0,0xe0,0xe0);
+      else bg = (i&1)?RGBVAL16(0xe0,0xe0,0xe0):RGBVAL16(0xff,0xff,0xff);
+      if ( (cxpos == i) && (cypos == row) ) bg = RGBVAL16(0x00,0xff,0xff);
+      tft.drawTextNoDma(kxoff+24*i,kyoff+32*row+0 , "   ", RGBVAL16(0x00,0x00,0x00), bg, false);
+      tft.drawTextNoDma(kxoff+24*i,kyoff+32*row+8 , &c[0], RGBVAL16(0x00,0x00,0x00), bg, true);
+      tft.drawTextNoDma(kxoff+24*i,kyoff+32*row+24, "   ", RGBVAL16(0x00,0x00,0x00), bg, false);
+    } 
   }
-  else if (oskbMap == 1) {
-    lineOSKB(KXOFF,KYOFF, keylables_map2_0,  0);
-    lineOSKB(KXOFF,KYOFF, keylables_map2_1,  1);
-    lineOSKB(KXOFF,KYOFF, keylables_map2_2,  2);
-  }
-  else {
-    lineOSKB(KXOFF,KYOFF, keylables_map3_0,  0);
-    lineOSKB(KXOFF,KYOFF, keylables_map3_1,  1);
-    lineOSKB(KXOFF,KYOFF, keylables_map3_2,  2);
-  }
-*/  
-}
 
-void toggleOskb(bool forceoff) {
-  if (forceoff) oskbOn=true; 
-  if (oskbOn) {
-    oskbOn = false;
-    tft.fillScreenNoDma(RGBVAL16(0x00,0x00,0x00));
-    tft.drawTextNoDma(0,32, "Press USER2 to toggle onscreen keyboard.", RGBVAL16(0xff,0xff,0xff), RGBVAL16(0x00,0x00,0x00), true);
-  } else {
-    oskbOn = true;
-    tft.fillScreenNoDma(RGBVAL16(0x00,0x00,0x00));
-    tft.drawTextNoDma(0,32, " Press USER2 to exit onscreen keyboard. ", RGBVAL16(0xff,0xff,0xff), RGBVAL16(0x00,0x00,0x00), true);
-    tft.drawTextNoDma(0,64, "    (USER1 to toggle between keymaps)   ", RGBVAL16(0x00,0xff,0xff), RGBVAL16(0x00,0x00,0xff), true);
-    tft.drawRectNoDma(KXOFF,KYOFF, 22*8, 3*16, RGBVAL16(0x00,0x00,0xFF));
-    drawOskb();        
-  }
-}
-
-static int handleOskb(void)
-{  
-  int retval = 0;
-
-  uint16_t bClick = bLastState & ~oskbBLastState;
-  oskbBLastState = bLastState;
-  /*
-  static const char * digits = "0123456789ABCDEF";
-  char buf[5] = {0,0,0,0,0};
-  int val = bClick;
-  buf[0] = digits[(val>>12)&0xf];
-  buf[1] = digits[(val>>8)&0xf];
-  buf[2] = digits[(val>>4)&0xf];
-  buf[3] = digits[val&0xf];
-  tft.drawTextNoDma(0,KYOFF+ 64,buf,RGBVAL16(0x00,0x00,0x00),RGBVAL16(0xFF,0xFF,0xFF),1);
-  */
-  if (bClick & MASK_KEY_USER2)
-  { 
-    toggleOskb(false);
-  }
-  if (oskbOn)
+  static void drawOskb(void)
   {
-    bool updated = true;
-    if (bClick & MASK_KEY_USER1)
-    { 
-      oskbMap += 1;
-      if (oskbMap == 3) oskbMap = 0;
-    }    
-    else if (bClick & MASK_JOY2_LEFT)
-    {  
-      cxpos++;
-      if (cxpos >= KWIDTH) cxpos = 0;
+  //  lineOSKB2(KXOFF,KYOFF+0,  (char *)"Q1W2E3R4T5Y6U7I8O9P0<=",  0);
+  //  lineOSKB2(KXOFF,KYOFF+16, (char *)"  A!S@D#F$G%H+J&K*L-EN",  1);
+  //  lineOSKB2(KXOFF,KYOFF+32, (char *)"  Z(X)C?V/B\"N<M>.,SP  ", 2);
+  /*  
+    if (oskbMap == 0) {
+      lineOSKB(KXOFF,KYOFF, keylables_map1_0,  0);
+      lineOSKB(KXOFF,KYOFF, keylables_map1_1,  1);
+      lineOSKB(KXOFF,KYOFF, keylables_map1_2,  2);
     }
-    else if (bClick & MASK_JOY2_RIGHT)
-    {  
-      cxpos--;
-      if (cxpos < 0) cxpos = KWIDTH-1;
-    }
-    else if (bClick & MASK_JOY2_DOWN)
-    {  
-      cypos++;
-      if (cypos >= KHEIGHT) cypos = 0;
-    }
-    else if (bClick & MASK_JOY2_UP)
-    {  
-      cypos--;
-      if (cypos < 0) cypos = KHEIGHT-1;
-    }
-    else if (oskbBLastState & MASK_JOY2_BTN)
-    {  
-      retval = cypos*KWIDTH+cxpos+1;
-      if (retval) {
-        retval--;
-        //if (retval & 1) retval = key_map2[retval>>1];
-        //else retval = key_map1[retval>>1];
-        if (oskbMap == 0) {
-          retval = key_map1[retval];
-        }
-        else if (oskbMap == 1) {
-          retval = key_map2[retval];
-        }
-        else {
-          retval = key_map3[retval];
-        }
-        //if (retval) { toggleOskb(true); updated=false; };
-      }
+    else if (oskbMap == 1) {
+      lineOSKB(KXOFF,KYOFF, keylables_map2_0,  0);
+      lineOSKB(KXOFF,KYOFF, keylables_map2_1,  1);
+      lineOSKB(KXOFF,KYOFF, keylables_map2_2,  2);
     }
     else {
-      updated=false;
-    }    
-    if (updated) drawOskb();
+      lineOSKB(KXOFF,KYOFF, keylables_map3_0,  0);
+      lineOSKB(KXOFF,KYOFF, keylables_map3_1,  1);
+      lineOSKB(KXOFF,KYOFF, keylables_map3_2,  2);
+    }
+  */  
   }
 
-  return retval;    
-}
+  void toggleOskb(bool forceoff) {
+    if (forceoff) oskbOn=true; 
+    if (oskbOn) {
+      oskbOn = false;
+      tft.fillScreenNoDma(RGBVAL16(0x00,0x00,0x00));
+      tft.drawTextNoDma(0,32, "Press USER2 to toggle onscreen keyboard.", RGBVAL16(0xff,0xff,0xff), RGBVAL16(0x00,0x00,0x00), true);
+    } else {
+      oskbOn = true;
+      tft.fillScreenNoDma(RGBVAL16(0x00,0x00,0x00));
+      tft.drawTextNoDma(0,32, " Press USER2 to exit onscreen keyboard. ", RGBVAL16(0xff,0xff,0xff), RGBVAL16(0x00,0x00,0x00), true);
+      tft.drawTextNoDma(0,64, "    (USER1 to toggle between keymaps)   ", RGBVAL16(0x00,0xff,0xff), RGBVAL16(0x00,0x00,0xff), true);
+      tft.drawRectNoDma(KXOFF,KYOFF, 22*8, 3*16, RGBVAL16(0x00,0x00,0xFF));
+      drawOskb();        
+    }
+  }
+
+  static int handleOskb(void)
+  {  
+    int retval = 0;
+
+    uint16_t bClick = bLastState & ~oskbBLastState;
+    oskbBLastState = bLastState;
+    /*
+    static const char * digits = "0123456789ABCDEF";
+    char buf[5] = {0,0,0,0,0};
+    int val = bClick;
+    buf[0] = digits[(val>>12)&0xf];
+    buf[1] = digits[(val>>8)&0xf];
+    buf[2] = digits[(val>>4)&0xf];
+    buf[3] = digits[val&0xf];
+    tft.drawTextNoDma(0,KYOFF+ 64,buf,RGBVAL16(0x00,0x00,0x00),RGBVAL16(0xFF,0xFF,0xFF),1);
+    */
+    if (bClick & MASK_KEY_USER2)
+    { 
+      toggleOskb(false);
+    }
+    if (oskbOn)
+    {
+      bool updated = true;
+      if (bClick & MASK_KEY_USER1)
+      { 
+        oskbMap += 1;
+        if (oskbMap == 3) oskbMap = 0;
+      }    
+      else if (bClick & MASK_JOY2_LEFT)
+      {  
+        cxpos++;
+        if (cxpos >= KWIDTH) cxpos = 0;
+      }
+      else if (bClick & MASK_JOY2_RIGHT)
+      {  
+        cxpos--;
+        if (cxpos < 0) cxpos = KWIDTH-1;
+      }
+      else if (bClick & MASK_JOY2_DOWN)
+      {  
+        cypos++;
+        if (cypos >= KHEIGHT) cypos = 0;
+      }
+      else if (bClick & MASK_JOY2_UP)
+      {  
+        cypos--;
+        if (cypos < 0) cypos = KHEIGHT-1;
+      }
+      else if (oskbBLastState & MASK_JOY2_BTN)
+      {  
+        retval = cypos*KWIDTH+cxpos+1;
+        if (retval) {
+          retval--;
+          //if (retval & 1) retval = key_map2[retval>>1];
+          //else retval = key_map1[retval>>1];
+          if (oskbMap == 0) {
+            retval = key_map1[retval];
+          }
+          else if (oskbMap == 1) {
+            retval = key_map2[retval];
+          }
+          else {
+            retval = key_map3[retval];
+          }
+          //if (retval) { toggleOskb(true); updated=false; };
+        }
+      }
+      else {
+        updated=false;
+      }    
+      if (updated) drawOskb();
+    }
+
+    return retval;    
+  }
 #endif
 
 /********************************
@@ -328,9 +338,9 @@ int emu_ReadAnalogJoyX(int min, int max)
 {
   adc_select_input(0);
   int val = adc_read();
-#if INVX
-  val = 4095 - val;
-#endif
+  #if INVX
+    val = 4095 - val;
+  #endif
   val = val-xRef;
   val = ((val*140)/100);
   if ( (val > -512) && (val < 512) ) val = 0;
@@ -342,9 +352,9 @@ int emu_ReadAnalogJoyY(int min, int max)
 {
   adc_select_input(1);  
   int val = adc_read();
-#if INVY
-  val = 4095 - val;
-#endif
+  #if INVY
+    val = 4095 - val;
+  #endif
   val = val-yRef;
   val = ((val*120)/100);
   if ( (val > -512) && (val < 512) ) val = 0;
@@ -354,59 +364,60 @@ int emu_ReadAnalogJoyY(int min, int max)
   return (val*(max-min))/4096;
 }
 
-
 static uint16_t readAnalogJoystick(void)
 {
   uint16_t joysval = 0;
-#ifdef PIN_JOY2_A1X
-  int xReading = emu_ReadAnalogJoyX(0,256);
-  if (xReading > 128) joysval |= MASK_JOY2_LEFT;
-  else if (xReading < 128) joysval |= MASK_JOY2_RIGHT;
-  
-  int yReading = emu_ReadAnalogJoyY(0,256);
-  if (yReading < 128) joysval |= MASK_JOY2_UP;
-  else if (yReading > 128) joysval |= MASK_JOY2_DOWN;
-#endif 
+  #ifdef PIN_JOY2_A1X
+    int xReading = emu_ReadAnalogJoyX(0,256);
+    if (xReading > 128) joysval |= MASK_JOY2_LEFT;
+    else if (xReading < 128) joysval |= MASK_JOY2_RIGHT;
+    
+    int yReading = emu_ReadAnalogJoyY(0,256);
+    if (yReading < 128) joysval |= MASK_JOY2_UP;
+    else if (yReading > 128) joysval |= MASK_JOY2_DOWN;
+  #endif 
   // First joystick
-#if INVY
-#ifdef PIN_JOY2_1
-  if ( !gpio_get(PIN_JOY2_1) ) joysval |= MASK_JOY2_DOWN;
-#endif
-#ifdef PIN_JOY2_2
-  if ( !gpio_get(PIN_JOY2_2) ) joysval |= MASK_JOY2_UP;
-#endif
-#else
-#ifdef PIN_JOY2_1
-  if ( !gpio_get(PIN_JOY2_1) ) joysval |= MASK_JOY2_UP;
-#endif
-#ifdef PIN_JOY2_2
-  if ( !gpio_get(PIN_JOY2_2) ) joysval |= MASK_JOY2_DOWN;
-#endif
-#endif
-#if INVX
-#ifdef PIN_JOY2_3
-  if ( !gpio_get(PIN_JOY2_3) ) joysval |= MASK_JOY2_LEFT;
-#endif
-#ifdef PIN_JOY2_4
-  if ( !gpio_get(PIN_JOY2_4) ) joysval |= MASK_JOY2_RIGHT;
-#endif
-#else
-#ifdef PIN_JOY2_3
-  if ( !gpio_get(PIN_JOY2_3) ) joysval |= MASK_JOY2_RIGHT;
-#endif
-#ifdef PIN_JOY2_4
-  if ( !gpio_get(PIN_JOY2_4) ) joysval |= MASK_JOY2_LEFT;
-#endif
-#endif
-#ifdef PIN_JOY2_BTN
-  joysval |= (gpio_get(PIN_JOY2_BTN) ? 0 : MASK_JOY2_BTN);
-#endif
+  #if INVY
+    #ifdef PIN_JOY2_1
+      if ( !gpio_get(PIN_JOY2_1) ) joysval |= MASK_JOY2_DOWN;
+    #endif
+    #ifdef PIN_JOY2_2
+      if ( !gpio_get(PIN_JOY2_2) ) joysval |= MASK_JOY2_UP;
+    #endif
+  #else
+    #ifdef PIN_JOY2_1
+      if ( !gpio_get(PIN_JOY2_1) ) joysval |= MASK_JOY2_UP;
+    #endif
+    #ifdef PIN_JOY2_2
+      if ( !gpio_get(PIN_JOY2_2) ) joysval |= MASK_JOY2_DOWN;
+    #endif
+  #endif
+  #if INVX
+    #ifdef PIN_JOY2_3
+      if ( !gpio_get(PIN_JOY2_3) ) joysval |= MASK_JOY2_LEFT;
+    #endif
+    #ifdef PIN_JOY2_4
+      if ( !gpio_get(PIN_JOY2_4) ) joysval |= MASK_JOY2_RIGHT;
+    #endif
+  #else
+    #ifdef PIN_JOY2_3
+      if ( !gpio_get(PIN_JOY2_3) ) joysval |= MASK_JOY2_RIGHT;
+    #endif
+    #ifdef PIN_JOY2_4
+      if ( !gpio_get(PIN_JOY2_4) ) joysval |= MASK_JOY2_LEFT;
+    #endif
+  #endif
+
+  #ifdef PIN_JOY2_BTN
+    joysval |= (gpio_get(PIN_JOY2_BTN) ? 0 : MASK_JOY2_BTN);
+  #endif
 
   return (joysval);     
 }
 
 
-int emu_SwapJoysticks(int statusOnly) {
+int emu_SwapJoysticks(int statusOnly)
+{
   if (!statusOnly) {
     if (joySwapped) {
       joySwapped = false;
@@ -430,40 +441,39 @@ int emu_ReadKeys(void)
   uint16_t j2 = 0;
   
   // Second joystick
-#if INVY
-#ifdef PIN_JOY1_1
-  if ( !gpio_get(PIN_JOY1_1) ) j2 |= MASK_JOY2_DOWN;
-#endif
-#ifdef PIN_JOY1_2
-  if ( !gpio_get(PIN_JOY1_2) ) j2 |= MASK_JOY2_UP;
-#endif
-#else
-#ifdef PIN_JOY1_1
-  if ( !gpio_get(PIN_JOY1_1) ) j2 |= MASK_JOY2_UP;
-#endif
-#ifdef PIN_JOY1_2
-  if ( !gpio_get(PIN_JOY1_2) ) j2 |= MASK_JOY2_DOWN;
-#endif
-#endif
-#if INVX
-#ifdef PIN_JOY1_3
-  if ( !gpio_get(PIN_JOY1_3) ) j2 |= MASK_JOY2_LEFT;
-#endif
-#ifdef PIN_JOY1_4
-  if ( !gpio_get(PIN_JOY1_4) ) j2 |= MASK_JOY2_RIGHT;
-#endif
-#else
-#ifdef PIN_JOY1_3
-  if ( !gpio_get(PIN_JOY1_3) ) j2 |= MASK_JOY2_RIGHT;
-#endif
-#ifdef PIN_JOY1_4
-  if ( !gpio_get(PIN_JOY1_4) ) j2 |= MASK_JOY2_LEFT;
-#endif
-#endif
-#ifdef PIN_JOY1_BTN
-  if ( !gpio_get(PIN_JOY1_BTN) ) j2 |= MASK_JOY2_BTN;
-#endif
-
+  #if INVY
+    #ifdef PIN_JOY1_1
+      if ( !gpio_get(PIN_JOY1_1) ) j2 |= MASK_JOY2_DOWN;
+    #endif
+    #ifdef PIN_JOY1_2
+      if ( !gpio_get(PIN_JOY1_2) ) j2 |= MASK_JOY2_UP;
+    #endif
+  #else
+    #ifdef PIN_JOY1_1
+      if ( !gpio_get(PIN_JOY1_1) ) j2 |= MASK_JOY2_UP;
+    #endif
+    #ifdef PIN_JOY1_2
+      if ( !gpio_get(PIN_JOY1_2) ) j2 |= MASK_JOY2_DOWN;
+    #endif
+  #endif
+  #if INVX
+    #ifdef PIN_JOY1_3
+      if ( !gpio_get(PIN_JOY1_3) ) j2 |= MASK_JOY2_LEFT;
+    #endif
+    #ifdef PIN_JOY1_4
+      if ( !gpio_get(PIN_JOY1_4) ) j2 |= MASK_JOY2_RIGHT;
+    #endif
+  #else
+    #ifdef PIN_JOY1_3
+      if ( !gpio_get(PIN_JOY1_3) ) j2 |= MASK_JOY2_RIGHT;
+    #endif
+    #ifdef PIN_JOY1_4
+      if ( !gpio_get(PIN_JOY1_4) ) j2 |= MASK_JOY2_LEFT;
+    #endif
+  #endif
+  #ifdef PIN_JOY1_BTN
+    if ( !gpio_get(PIN_JOY1_BTN) ) j2 |= MASK_JOY2_BTN;
+  #endif
 
   if (joySwapped) {
     retval = ((j1 << 8) | j2);
@@ -478,61 +488,61 @@ int emu_ReadKeys(void)
   if (usbnavpad & MASK_JOY2_RIGHT) retval |= MASK_JOY2_RIGHT;
   if (usbnavpad & MASK_JOY2_BTN) retval |= MASK_JOY2_BTN;
 
-#ifdef PIN_KEY_USER1 
-  if ( !gpio_get(PIN_KEY_USER1) ) retval |= MASK_KEY_USER1;
-#endif
-#ifdef PIN_KEY_USER2 
-  if ( !gpio_get(PIN_KEY_USER2) ) retval |= MASK_KEY_USER2;
-#endif
-#ifdef PIN_KEY_USER3 
-  if ( !gpio_get(PIN_KEY_USER3) ) retval |= MASK_KEY_USER3;
-#endif
-#ifdef PIN_KEY_USER4 
-  if ( !gpio_get(PIN_KEY_USER4) ) retval |= MASK_KEY_USER4;
-#endif
+  #ifdef PIN_KEY_USER1 
+    if ( !gpio_get(PIN_KEY_USER1) ) retval |= MASK_KEY_USER1;
+  #endif
+  #ifdef PIN_KEY_USER2 
+    if ( !gpio_get(PIN_KEY_USER2) ) retval |= MASK_KEY_USER2;
+  #endif
+  #ifdef PIN_KEY_USER3 
+    if ( !gpio_get(PIN_KEY_USER3) ) retval |= MASK_KEY_USER3;
+  #endif
+  #ifdef PIN_KEY_USER4 
+    if ( !gpio_get(PIN_KEY_USER4) ) retval |= MASK_KEY_USER4;
+  #endif
 
 
 #if (defined(PICOMPUTER) || defined(PICOZX) )
   keymatrix_hitrow = -1;
   unsigned char row;
-#ifdef PICOZX  
-  unsigned short cols[7]={KCOLOUT1,KCOLOUT2,KCOLOUT3,KCOLOUT4,KCOLOUT5,KCOLOUT6,KCOLOUT7};
-  unsigned char keymatrixtmp[7];
-  for (int i=0;i<7;i++){
-#else  
-  unsigned short cols[6]={KCOLOUT1,KCOLOUT2,KCOLOUT3,KCOLOUT4,KCOLOUT5,KCOLOUT6};
-  unsigned char keymatrixtmp[6];
-  for (int i=0;i<6;i++){
-#endif
-    gpio_set_dir(cols[i], GPIO_OUT);
-    gpio_put(cols[i], 0);
-#ifdef SWAP_ALT_DEL
-    sleep_us(1);
-    //__asm volatile ("nop\n"); // 4-8ns
-#endif
-    row=0; 
-#ifdef PICOZX  
-    row |= (gpio_get(KROWIN1) ? 0 : 0x04);
-    row |= (gpio_get(KROWIN1) ? 0 : 0x04);
-    row |= (gpio_get(KROWIN1) ? 0 : 0x04);
-    row |= (gpio_get(KROWIN1) ? 0 : 0x04);
-    row |= (gpio_get(KROWIN2) ? 0 : 0x01);
-    row |= (gpio_get(KROWIN3) ? 0 : 0x08);
-    row |= (gpio_get(KROWIN4) ? 0 : 0x02);
-    row |= (gpio_get(KROWIN5) ? 0 : 0x10);
-    row |= (gpio_get(KROWIN6) ? 0 : 0x20);
-    row |= (gpio_get(KROWIN7) ? 0 : 0x40);
-#else
-    row |= (gpio_get(KROWIN2) ? 0 : 0x01);
-    row |= (gpio_get(KROWIN2) ? 0 : 0x01);
-    row |= (gpio_get(KROWIN2) ? 0 : 0x01);
-    row |= (gpio_get(KROWIN2) ? 0 : 0x01);
-    row |= (gpio_get(KROWIN4) ? 0 : 0x02);
-    row |= (gpio_get(KROWIN1) ? 0 : 0x04);
-    row |= (gpio_get(KROWIN3) ? 0 : 0x08);
-    row |= (gpio_get(KROWIN5) ? 0 : 0x10);
-    row |= (gpio_get(KROWIN6) ? 0 : 0x20);
-#endif    
+  #ifdef PICOZX  
+    unsigned short cols[7]={KCOLOUT1,KCOLOUT2,KCOLOUT3,KCOLOUT4,KCOLOUT5,KCOLOUT6,KCOLOUT7};
+    unsigned char keymatrixtmp[7];
+    for (int i=0;i<7;i++){
+  #else  
+    unsigned short cols[6]={KCOLOUT1,KCOLOUT2,KCOLOUT3,KCOLOUT4,KCOLOUT5,KCOLOUT6};
+    unsigned char keymatrixtmp[6];
+    for (int i=0;i<6;i++){
+  #endif
+  gpio_set_dir(cols[i], GPIO_OUT);
+  gpio_put(cols[i], 0);
+  #ifdef SWAP_ALT_DEL
+      sleep_us(1);
+      //__asm volatile ("nop\n"); // 4-8ns
+  #endif
+      row=0; 
+  #ifdef PICOZX  
+      row |= (gpio_get(KROWIN1) ? 0 : 0x04);
+      row |= (gpio_get(KROWIN1) ? 0 : 0x04);
+      row |= (gpio_get(KROWIN1) ? 0 : 0x04);
+      row |= (gpio_get(KROWIN1) ? 0 : 0x04);
+      row |= (gpio_get(KROWIN2) ? 0 : 0x01);
+      row |= (gpio_get(KROWIN3) ? 0 : 0x08);
+      row |= (gpio_get(KROWIN4) ? 0 : 0x02);
+      row |= (gpio_get(KROWIN5) ? 0 : 0x10);
+      row |= (gpio_get(KROWIN6) ? 0 : 0x20);
+      row |= (gpio_get(KROWIN7) ? 0 : 0x40);
+  #else
+      row |= (gpio_get(KROWIN2) ? 0 : 0x01);
+      row |= (gpio_get(KROWIN2) ? 0 : 0x01);
+      row |= (gpio_get(KROWIN2) ? 0 : 0x01);
+      row |= (gpio_get(KROWIN2) ? 0 : 0x01);
+      row |= (gpio_get(KROWIN4) ? 0 : 0x02);
+      row |= (gpio_get(KROWIN1) ? 0 : 0x04);
+      row |= (gpio_get(KROWIN3) ? 0 : 0x08);
+      row |= (gpio_get(KROWIN5) ? 0 : 0x10);
+      row |= (gpio_get(KROWIN6) ? 0 : 0x20);
+  #endif    
     //gpio_set_dir(cols[i], GPIO_OUT);
     gpio_put(cols[i], 1);
     gpio_set_dir(cols[i], GPIO_IN);
@@ -540,15 +550,15 @@ int emu_ReadKeys(void)
     keymatrixtmp[i] = row;
   }
 
-#ifdef SWAP_ALT_DEL
-  // Swap ALT and DEL  
-  unsigned char alt = keymatrixtmp[0] & 0x02;
-  unsigned char del = keymatrixtmp[5] & 0x20;
-  keymatrixtmp[0] &= ~0x02;
-  keymatrixtmp[5] &= ~0x20;
-  if (alt) keymatrixtmp[5] |= 0x20;
-  if (del) keymatrixtmp[0] |= 0x02;
-#endif
+  #ifdef SWAP_ALT_DEL
+    // Swap ALT and DEL  
+    unsigned char alt = keymatrixtmp[0] & 0x02;
+    unsigned char del = keymatrixtmp[5] & 0x20;
+    keymatrixtmp[0] &= ~0x02;
+    keymatrixtmp[5] &= ~0x20;
+    if (alt) keymatrixtmp[5] |= 0x20;
+    if (del) keymatrixtmp[0] |= 0x02;
+  #endif
 
 
 #ifdef PICOZX  
@@ -723,31 +733,31 @@ unsigned short emu_DebounceLocalKeys(void)
 
 int emu_ReadI2CKeyboard(void) {
   int retval=0;
-#if (defined(PICOMPUTER) || defined(PICOZX) )
-  if (key_alt) {
-    keys = (const unsigned short *)key_map3;
-  }
-  else if (key_fn) {
-    keys = (const unsigned short *)key_map2;
-  }
-  else {
-    keys = (const unsigned short *)key_map1;
-  }
-  if (keymatrix_hitrow >=0 ) {
-    unsigned short match = ((unsigned short)keymatrix_hitrow<<8) | keymatrix[keymatrix_hitrow];  
-    for (int i=0; i<sizeof(matkeys)/sizeof(unsigned short); i++) {
-      if (match == matkeys[i]) {
-        hundred_ms_cnt = 0;
-        return (keys[i]);
+  #if (defined(PICOMPUTER) || defined(PICOZX) )
+    if (key_alt) {
+      keys = (const unsigned short *)key_map3;
+    }
+    else if (key_fn) {
+      keys = (const unsigned short *)key_map2;
+    }
+    else {
+      keys = (const unsigned short *)key_map1;
+    }
+    if (keymatrix_hitrow >=0 ) {
+      unsigned short match = ((unsigned short)keymatrix_hitrow<<8) | keymatrix[keymatrix_hitrow];  
+      for (int i=0; i<sizeof(matkeys)/sizeof(unsigned short); i++) {
+        if (match == matkeys[i]) {
+          hundred_ms_cnt = 0;
+          return (keys[i]);
+        }
       }
     }
-  }
-#endif
-#if (defined(ILI9341) || defined(ST7789)) && defined(USE_VGA)
-  if (!menuOn) {
-    retval = handleOskb(); 
-  }  
-#endif  
+  #endif
+  #if (defined(ILI9341) || defined(ST7789)) && defined(USE_VGA)
+    if (!menuOn) {
+      retval = handleOskb(); 
+    }  
+  #endif  
   return(retval);
 }
 
@@ -759,188 +769,184 @@ unsigned char emu_ReadI2CKeyboard2(int row) {
   return retval;
 }
 
-
 void emu_InitJoysticks(void) { 
-
   // Second Joystick   
-#ifdef PIN_JOY1_1
-  gpio_set_pulls(PIN_JOY1_1,true,false);
-  gpio_set_dir(PIN_JOY1_1,GPIO_IN);  
-#endif  
-#ifdef PIN_JOY1_2
-  gpio_set_pulls(PIN_JOY1_2,true,false);
-  gpio_set_dir(PIN_JOY1_2,GPIO_IN);  
-#endif  
-#ifdef PIN_JOY1_3
-  gpio_set_pulls(PIN_JOY1_3,true,false);
-  gpio_set_dir(PIN_JOY1_3,GPIO_IN);  
-#endif  
-#ifdef PIN_JOY1_4
-  gpio_set_pulls(PIN_JOY1_4,true,false);
-  gpio_set_dir(PIN_JOY1_4,GPIO_IN);  
-#endif  
-#ifdef PIN_JOY1_BTN
-  gpio_set_pulls(PIN_JOY1_BTN,true,false);
-  gpio_set_dir(PIN_JOY1_BTN,GPIO_IN);  
-#endif  
+  #ifdef PIN_JOY1_1
+    gpio_set_pulls(PIN_JOY1_1,true,false);
+    gpio_set_dir(PIN_JOY1_1,GPIO_IN);  
+  #endif  
+  #ifdef PIN_JOY1_2
+    gpio_set_pulls(PIN_JOY1_2,true,false);
+    gpio_set_dir(PIN_JOY1_2,GPIO_IN);  
+  #endif  
+  #ifdef PIN_JOY1_3
+    gpio_set_pulls(PIN_JOY1_3,true,false);
+    gpio_set_dir(PIN_JOY1_3,GPIO_IN);  
+  #endif  
+  #ifdef PIN_JOY1_4
+    gpio_set_pulls(PIN_JOY1_4,true,false);
+    gpio_set_dir(PIN_JOY1_4,GPIO_IN);  
+  #endif  
+  #ifdef PIN_JOY1_BTN
+    gpio_set_pulls(PIN_JOY1_BTN,true,false);
+    gpio_set_dir(PIN_JOY1_BTN,GPIO_IN);  
+  #endif  
 
-  // User keys   
-#ifdef PIN_KEY_USER1
-  gpio_set_pulls(PIN_KEY_USER1,true,false);
-  gpio_set_dir(PIN_KEY_USER1,GPIO_IN);  
-#endif  
-#ifdef PIN_KEY_USER2
-  gpio_set_dir(PIN_KEY_USER2,GPIO_IN);
-  gpio_set_pulls(PIN_KEY_USER2,true,false);
-#endif  
-#ifdef PIN_KEY_USER3
-  gpio_set_pulls(PIN_KEY_USER3,true,false);
-  gpio_set_dir(PIN_KEY_USER3,GPIO_IN);  
-#endif  
-#ifdef PIN_KEY_USER4
-  gpio_set_pulls(PIN_KEY_USER4,true,false);
-  gpio_set_dir(PIN_KEY_USER4,GPIO_IN);  
-#endif  
+    // User keys   
+  #ifdef PIN_KEY_USER1
+    gpio_set_pulls(PIN_KEY_USER1,true,false);
+    gpio_set_dir(PIN_KEY_USER1,GPIO_IN);  
+  #endif  
+  #ifdef PIN_KEY_USER2
+    gpio_set_dir(PIN_KEY_USER2,GPIO_IN);
+    gpio_set_pulls(PIN_KEY_USER2,true,false);
+  #endif  
+  #ifdef PIN_KEY_USER3
+    gpio_set_pulls(PIN_KEY_USER3,true,false);
+    gpio_set_dir(PIN_KEY_USER3,GPIO_IN);  
+  #endif  
+  #ifdef PIN_KEY_USER4
+    gpio_set_pulls(PIN_KEY_USER4,true,false);
+    gpio_set_dir(PIN_KEY_USER4,GPIO_IN);  
+  #endif  
 
   // First Joystick   
-#ifdef PIN_JOY2_1
-  gpio_set_pulls(PIN_JOY2_1,true,false);
-  gpio_set_dir(PIN_JOY2_1,GPIO_IN);
-  gpio_set_input_enabled(PIN_JOY2_1, true); // Force ADC as digital input        
-#endif  
-#ifdef PIN_JOY2_2
-  gpio_set_pulls(PIN_JOY2_2,true,false);
-  gpio_set_dir(PIN_JOY2_2,GPIO_IN);  
-  gpio_set_input_enabled(PIN_JOY2_2, true);  // Force ADC as digital input       
-#endif  
-#ifdef PIN_JOY2_3
-  gpio_set_pulls(PIN_JOY2_3,true,false);
-  gpio_set_dir(PIN_JOY2_3,GPIO_IN);  
-  gpio_set_input_enabled(PIN_JOY2_3, true);  // Force ADC as digital input        
-#endif  
-#ifdef PIN_JOY2_4
-  gpio_set_pulls(PIN_JOY2_4,true,false);
-  gpio_set_dir(PIN_JOY2_4,GPIO_IN);  
-#endif  
-#ifdef PIN_JOY2_BTN
-  gpio_set_pulls(PIN_JOY2_BTN,true,false);
-  gpio_set_dir(PIN_JOY2_BTN,GPIO_IN);  
-#endif  
+  #ifdef PIN_JOY2_1
+    gpio_set_pulls(PIN_JOY2_1,true,false);
+    gpio_set_dir(PIN_JOY2_1,GPIO_IN);
+    gpio_set_input_enabled(PIN_JOY2_1, true); // Force ADC as digital input        
+  #endif  
+  #ifdef PIN_JOY2_2
+    gpio_set_pulls(PIN_JOY2_2,true,false);
+    gpio_set_dir(PIN_JOY2_2,GPIO_IN);  
+    gpio_set_input_enabled(PIN_JOY2_2, true);  // Force ADC as digital input       
+  #endif  
+  #ifdef PIN_JOY2_3
+    gpio_set_pulls(PIN_JOY2_3,true,false);
+    gpio_set_dir(PIN_JOY2_3,GPIO_IN);  
+    gpio_set_input_enabled(PIN_JOY2_3, true);  // Force ADC as digital input        
+  #endif  
+  #ifdef PIN_JOY2_4
+    gpio_set_pulls(PIN_JOY2_4,true,false);
+    gpio_set_dir(PIN_JOY2_4,GPIO_IN);  
+  #endif  
+  #ifdef PIN_JOY2_BTN
+    gpio_set_pulls(PIN_JOY2_BTN,true,false);
+    gpio_set_dir(PIN_JOY2_BTN,GPIO_IN);  
+  #endif  
  
-#ifdef PIN_JOY2_A1X
-  adc_init(); 
-  adc_gpio_init(PIN_JOY2_A1X);
-  adc_gpio_init(PIN_JOY2_A2Y);
-  xRef=0; yRef=0;
-  for (int i=0; i<10; i++) {
-    adc_select_input(0);  
-    xRef += adc_read();
-    adc_select_input(1);  
-    yRef += adc_read();
-    sleep_ms(20);
-  }
-#if INVX
-  xRef = 4095 -xRef/10;
-#else
-  xRef /= 10;
-#endif
-#if INVY
-  yRef = 4095 -yRef/10;
-#else
-  yRef /= 10;
-#endif
-#endif
+  #ifdef PIN_JOY2_A1X
+    adc_init(); 
+    adc_gpio_init(PIN_JOY2_A1X);
+    adc_gpio_init(PIN_JOY2_A2Y);
+    xRef=0; yRef=0;
+    for (int i=0; i<10; i++) {
+      adc_select_input(0);  
+      xRef += adc_read();
+      adc_select_input(1);  
+      yRef += adc_read();
+      sleep_ms(20);
+    }
+  #if INVX
+    xRef = 4095 -xRef/10;
+  #else
+    xRef /= 10;
+  #endif
+  #if INVY
+    yRef = 4095 -yRef/10;
+  #else
+    yRef /= 10;
+  #endif
+  #endif
 
-#if (defined(PICOMPUTER) || defined(PICOZX) ) 
-  // keyboard LED
-#ifdef KLED  
-  gpio_init(KLED);
-  gpio_set_dir(KLED, GPIO_OUT);
-  gpio_put(KLED, 1);
-#endif
-  // Output (rows)
-  gpio_init(KCOLOUT1);
-  gpio_init(KCOLOUT2);
-  gpio_init(KCOLOUT3);
-  gpio_init(KCOLOUT4);
-  gpio_init(KCOLOUT5);
-  gpio_init(KCOLOUT6);
-#ifdef PICOZX
-  gpio_init(KCOLOUT7);
-#endif  
-  gpio_set_dir(KCOLOUT1, GPIO_OUT); 
-  gpio_set_dir(KCOLOUT2, GPIO_OUT); 
-  gpio_set_dir(KCOLOUT3, GPIO_OUT); 
-  gpio_set_dir(KCOLOUT4, GPIO_OUT); 
-  gpio_set_dir(KCOLOUT5, GPIO_OUT); 
-  gpio_set_dir(KCOLOUT6, GPIO_OUT);
-#ifdef PICOZX
-  gpio_set_dir(KCOLOUT7, GPIO_OUT);
-#endif   
-  gpio_put(KCOLOUT1, 1);
-  gpio_put(KCOLOUT2, 1);
-  gpio_put(KCOLOUT3, 1);
-  gpio_put(KCOLOUT4, 1);
-  gpio_put(KCOLOUT5, 1);
-  gpio_put(KCOLOUT6, 1);
-#ifdef PICOZX
-  gpio_put(KCOLOUT7, 1);
-#endif   
-  // but set as input floating when not used!
-  gpio_set_dir(KCOLOUT1, GPIO_IN); 
-  gpio_set_dir(KCOLOUT2, GPIO_IN); 
-  gpio_set_dir(KCOLOUT3, GPIO_IN); 
-  gpio_set_dir(KCOLOUT4, GPIO_IN); 
-  gpio_set_dir(KCOLOUT5, GPIO_IN); 
-  gpio_set_dir(KCOLOUT6, GPIO_IN);
-#ifdef PICOZX
-  gpio_set_dir(KCOLOUT7, GPIO_IN);
-#endif   
-  gpio_disable_pulls(KCOLOUT1); 
-  gpio_disable_pulls(KCOLOUT2); 
-  gpio_disable_pulls(KCOLOUT3); 
-  gpio_disable_pulls(KCOLOUT4); 
-  gpio_disable_pulls(KCOLOUT5); 
-  gpio_disable_pulls(KCOLOUT6);
-#ifdef PICOZX
-  gpio_disable_pulls(KCOLOUT7);
-#endif   
-  // Input pins (cols)
-  gpio_init(KROWIN1);
-  gpio_init(KROWIN2);
-  gpio_init(KROWIN3);
-  gpio_init(KROWIN4);
-  gpio_init(KROWIN5);
-  gpio_init(KROWIN6);
-#ifdef PICOZX
-  gpio_init(KROWIN7);
-#endif   
-  gpio_set_dir(KROWIN1,GPIO_IN);  
-  gpio_set_dir(KROWIN2,GPIO_IN);  
-  gpio_set_dir(KROWIN3,GPIO_IN);  
-  gpio_set_dir(KROWIN4,GPIO_IN);  
-  gpio_set_dir(KROWIN5,GPIO_IN);  
-  gpio_set_dir(KROWIN6,GPIO_IN);  
-#ifdef PICOZX
-  gpio_set_dir(KROWIN7,GPIO_IN);  
-#endif 
-  gpio_pull_up(KROWIN1);
-  gpio_pull_up(KROWIN2);
-  gpio_pull_up(KROWIN3);
-  gpio_pull_up(KROWIN4);
-  gpio_pull_up(KROWIN5);
-  gpio_pull_up(KROWIN6);
-#ifdef PICOZX
-  gpio_pull_up(KROWIN7);
-#endif 
-#endif
+  #if (defined(PICOMPUTER) || defined(PICOZX) ) 
+    // keyboard LED
+    #ifdef KLED  
+      gpio_init(KLED);
+      gpio_set_dir(KLED, GPIO_OUT);
+      gpio_put(KLED, 1);
+    #endif
+      // Output (rows)
+      gpio_init(KCOLOUT1);
+      gpio_init(KCOLOUT2);
+      gpio_init(KCOLOUT3);
+      gpio_init(KCOLOUT4);
+      gpio_init(KCOLOUT5);
+      gpio_init(KCOLOUT6);
+    #ifdef PICOZX
+      gpio_init(KCOLOUT7);
+    #endif  
+      gpio_set_dir(KCOLOUT1, GPIO_OUT); 
+      gpio_set_dir(KCOLOUT2, GPIO_OUT); 
+      gpio_set_dir(KCOLOUT3, GPIO_OUT); 
+      gpio_set_dir(KCOLOUT4, GPIO_OUT); 
+      gpio_set_dir(KCOLOUT5, GPIO_OUT); 
+      gpio_set_dir(KCOLOUT6, GPIO_OUT);
+    #ifdef PICOZX
+      gpio_set_dir(KCOLOUT7, GPIO_OUT);
+    #endif   
+      gpio_put(KCOLOUT1, 1);
+      gpio_put(KCOLOUT2, 1);
+      gpio_put(KCOLOUT3, 1);
+      gpio_put(KCOLOUT4, 1);
+      gpio_put(KCOLOUT5, 1);
+      gpio_put(KCOLOUT6, 1);
+    #ifdef PICOZX
+      gpio_put(KCOLOUT7, 1);
+    #endif   
+      // but set as input floating when not used!
+      gpio_set_dir(KCOLOUT1, GPIO_IN); 
+      gpio_set_dir(KCOLOUT2, GPIO_IN); 
+      gpio_set_dir(KCOLOUT3, GPIO_IN); 
+      gpio_set_dir(KCOLOUT4, GPIO_IN); 
+      gpio_set_dir(KCOLOUT5, GPIO_IN); 
+      gpio_set_dir(KCOLOUT6, GPIO_IN);
+    #ifdef PICOZX
+      gpio_set_dir(KCOLOUT7, GPIO_IN);
+    #endif   
+      gpio_disable_pulls(KCOLOUT1); 
+      gpio_disable_pulls(KCOLOUT2); 
+      gpio_disable_pulls(KCOLOUT3); 
+      gpio_disable_pulls(KCOLOUT4); 
+      gpio_disable_pulls(KCOLOUT5); 
+      gpio_disable_pulls(KCOLOUT6);
+    #ifdef PICOZX
+      gpio_disable_pulls(KCOLOUT7);
+    #endif   
+      // Input pins (cols)
+      gpio_init(KROWIN1);
+      gpio_init(KROWIN2);
+      gpio_init(KROWIN3);
+      gpio_init(KROWIN4);
+      gpio_init(KROWIN5);
+      gpio_init(KROWIN6);
+    #ifdef PICOZX
+      gpio_init(KROWIN7);
+    #endif   
+      gpio_set_dir(KROWIN1,GPIO_IN);  
+      gpio_set_dir(KROWIN2,GPIO_IN);  
+      gpio_set_dir(KROWIN3,GPIO_IN);  
+      gpio_set_dir(KROWIN4,GPIO_IN);  
+      gpio_set_dir(KROWIN5,GPIO_IN);  
+      gpio_set_dir(KROWIN6,GPIO_IN);  
+    #ifdef PICOZX
+      gpio_set_dir(KROWIN7,GPIO_IN);  
+    #endif 
+      gpio_pull_up(KROWIN1);
+      gpio_pull_up(KROWIN2);
+      gpio_pull_up(KROWIN3);
+      gpio_pull_up(KROWIN4);
+      gpio_pull_up(KROWIN5);
+      gpio_pull_up(KROWIN6);
+    #ifdef PICOZX
+      gpio_pull_up(KROWIN7);
+    #endif 
+  #endif
 }
 
 int emu_setKeymap(int index) {
   return 0;
 }
-
-
 
 /********************************
  * Menu file loader UI
@@ -982,14 +988,11 @@ static int readNbFiles(char * rootdir) {
   return totalFiles;  
 }  
 
-
-
 void backgroundMenu(void) {
     menuRedraw=true;  
     tft.fillScreenNoDma(RGBVAL16(0x00,0x00,0x00));
     tft.drawTextNoDma(0,0, TITLE, RGBVAL16(0x00,0xff,0xff), RGBVAL16(0x00,0x00,0xff), true);           
 }
-
 
 static void menuLeft(void)
 {
@@ -997,7 +1000,6 @@ static void menuLeft(void)
   toggleOskb(true);  
 #endif
 }
-
 
 bool menuActive(void) 
 {
@@ -1029,8 +1031,10 @@ int handleMenu(uint16_t bClick)
     strcat(newpath, "/");
     strcat(newpath, selected_filename);
     strcpy(selection,newpath);
-    emu_printf("new filepath is");
-    emu_printf(selection);
+    #if DEBUG_OUTPUT
+      emu_printf("new filepath is");
+      emu_printf(selection);
+    #endif
     FILINFO entry;
     FRESULT fr;
     fr = f_stat(selection, &entry);
@@ -1151,13 +1155,18 @@ int emu_FileOpen(const char * filepath, const char * mode)
 {
   int retval = 0;
 
-  emu_printf("FileOpen...");
-  emu_printf(filepath);
+  #if DEBUG_OUTPUT
+    emu_printf("FileOpen...");
+    emu_printf(filepath);
+  #endif
+
   if( !(f_open(&file, filepath, FA_READ)) ) {
     retval = 1;  
   }
   else {
-    emu_printf("FileOpen failed");
+    #if DEBUG_OUTPUT
+      emu_printf("FileOpen failed");
+    #endif
   }
   return (retval);
 }
@@ -1175,8 +1184,10 @@ int emu_FileGetc(int handler)
   unsigned int retval=0;
   if( !(f_read (&file, &c, 1, &retval)) )
   if (retval != 1) {
-    emu_printf("emu_FileGetc failed");
-  }  
+    #if DEBUG_OUTPUT
+      emu_printf("emu_FileGetc failed");
+    #endif
+    }  
   return (int)c; 
 }
 
@@ -1200,8 +1211,10 @@ int emu_FileTell(int handler)
 unsigned int emu_FileSize(const char * filepath)
 {
   int filesize=0;
-  emu_printf("FileSize...");
-  emu_printf(filepath);
+  #if DEBUG_OUTPUT
+    emu_printf("FileSize...");
+    emu_printf(filepath);
+  #endif
   FILINFO entry;
   f_stat(filepath, &entry);
   filesize = entry.fsize; 
@@ -1211,17 +1224,24 @@ unsigned int emu_FileSize(const char * filepath)
 unsigned int emu_LoadFile(const char * filepath, void * buf, int size)
 {
   int filesize = 0;
-    
-  emu_printf("LoadFile...");
-  emu_printf(filepath);
+
+  #if DEBUG_OUTPUT  
+    emu_printf("LoadFile...");
+    emu_printf(filepath);
+  #endif
+
   if( !(f_open(&file, filepath, FA_READ)) ) {
     filesize = f_size(&file);
-    emu_printf(filesize);
+    #if DEBUG_OUTPUT
+      emu_printf(filesize);
+    #endif
     if (size >= filesize)
     {
       unsigned int retval=0;
       if( (f_read (&file, buf, filesize, &retval)) ) {
-        emu_printf("File read failed");        
+        #if DEBUG_OUTPUT
+          emu_printf("File read failed");
+        #endif          
       }
     }
     f_close(&file);
@@ -1264,7 +1284,9 @@ static bool emu_writeConfig(void)
   if( !(f_open(&outfile, ROMSDIR "/" AUTORUN_FILENAME, FA_CREATE_NEW | FA_WRITE)) ) {
     unsigned int sizeread=0;
     if( (f_write (&outfile, selection, strlen(selection), &sizeread)) ) {
-      emu_printf("Config write failed");        
+      #if DEBUG_OUTPUT
+        emu_printf("Config write failed");        
+      #endif
     }
     else {
       retval = true;
@@ -1281,7 +1303,9 @@ static bool emu_readConfig(void)
     unsigned int filesize = f_size(&outfile);
     unsigned int sizeread=0;
     if( (f_read (&outfile, selection, filesize, &sizeread)) ) {
-      emu_printf("Config read failed");        
+      #if DEBUG_OUTPUT
+        emu_printf("Config read failed");        
+      #endif
     }
     else {
       if (sizeread == filesize) {
@@ -1315,9 +1339,10 @@ void emu_init(void)
 
   strcpy(selection,ROMSDIR);
   nbFiles = readNbFiles(selection); 
-
-  emu_printf("SD initialized, files found: ");
-  emu_printi(nbFiles);
+  #if DEBUG_OUTPUT
+    emu_printf("SD initialized, files found: ");
+    emu_printi(nbFiles);
+  #endif
 #endif
 
   emu_InitJoysticks();
