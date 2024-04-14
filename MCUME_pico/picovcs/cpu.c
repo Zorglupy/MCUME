@@ -32,7 +32,7 @@
 #include "display.h"
 #include "exmacro.h"
 #include "exmacro.h"
-#include "Atari2600EmulatorGlobals.h"
+#include "atari2600EmulatorGlobals.h"
 
 extern int pausing;
 

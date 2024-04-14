@@ -31,7 +31,7 @@
 /* bear this legend.                                                         */
 /*                                                                           */
 /*****************************************************************************/
-#include "Atari2600EmulatorGlobals.h"
+#include "atari2600EmulatorGlobals.h"
 
 #include "emuapi.h"
 
