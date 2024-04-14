@@ -1,5 +1,5 @@
 
-#include "Atari2600EmulatorGlobals.h"
+#include "atari2600EmulatorGlobals.h"
 
 // indicates if the emulator thread is running or not
 int bThreadRunning = 0;
